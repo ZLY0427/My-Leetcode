@@ -8,9 +8,23 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
-bool is_rect(char** matrix, int row, int col,
-             int point1_row, int point1_col,
-             int point2_row, int point2_col);
+struct StackNode{
+    int index;
+    struct StackNode* next;
+};
+
+struct Stack{
+    struct StackNode* top;
+    int count;
+};
+
+struct Stack* stack_create();
+void stack_push(struct Stack* Stack, int index);
+int stack_pop(struct Stack* Stack);
+int stack_top(struct Stack* Stack);
+void stack_free(struct Stack* Stack);
+
+int help_maximalRectangle(int* heights, int heightsSize);
 
 int maximalRectangle(char** matrix, int matrixSize, int* matrixColSize)
 {
@@ -19,44 +33,135 @@ int maximalRectangle(char** matrix, int matrixSize, int* matrixColSize)
     int col = matrixColSize[0];
     int row = matrixSize;
 
+    if (col <= 0 || row <= 0) return 0;
+
     int maxarea = 0;
 
-    for (int point1_row = 0; point1_row < row; ++point1_row)
+    int* heights = (int*)calloc(col, sizeof(int));
+    if (!heights) return 0;
+
+    for (int i = 0; i < row; ++i)
     {
-        for (int point1_col = 0; point1_col < col; ++point1_col)
-        {
-            if (matrix[point1_row][point1_col] == '0') continue;
-            for (int point2_row = point1_row; point2_row < row; ++point2_row)
-            {
-                if (matrix[point2_row][point1_col] == '0') continue;
-                for (int point2_col = point1_col; point2_col < col; ++point2_col)
-                {
-                    if (matrix[point2_row][point2_col] == '0') break;
-                    if (is_rect(matrix, row, col, point1_row, point1_col, point2_row, point2_col))
-                    {
-                        int area = (point2_row - point1_row + 1) * (point2_col - point1_col + 1);
-                        maxarea = maxarea > area ? maxarea : area;
-                    }
-                    else break;
-                }
-            }
-        }
+        for (int j = 0; j < col; ++j)
+            heights[j] = matrix[i][j] == '1' ? heights[j] + 1 : 0;
+        
+        int area = help_maximalRectangle(heights, col);
+        maxarea = maxarea > area ? maxarea : area;
     }
+
+    free(heights);
+    return maxarea;
+}
+
+int help_maximalRectangle(int* heights, int heightsSize)
+{
+    if (!heights || heightsSize <= 0) return 0;
+    int maxarea = 0;
+
+    int* left = (int*)malloc(sizeof(int) * heightsSize);
+    int* right = (int*)malloc(sizeof(int) * heightsSize);
+    if (!left || !right)
+    {
+        free(left);
+        free(right);
+        return -1;
+    }
+
+    struct Stack* stack = stack_create();
+    if (!stack)
+    {
+        free(left);
+        free(right);
+        return -1;
+    }
+
+    for (int i = 0; i < heightsSize; i++)
+    {
+        while (stack -> count > 0 && heights[stack_top(stack)] >= heights[i])
+            stack_pop(stack);
+        left[i] = stack->count > 0 ? stack_top(stack) : -1;
+        stack_push(stack, i);
+    }
+
+    while (stack -> count > 0) stack_pop(stack);
+
+    for (int i = heightsSize - 1; i >= 0; i--)
+    {
+        while (stack -> count > 0 && heights[stack_top(stack)] >= heights[i])
+            stack_pop(stack);
+        right[i] = stack->count > 0 ? stack_top(stack) : heightsSize;
+        stack_push(stack, i);
+    }
+
+    stack_free(stack);
+
+    for (int i = 0; i < heightsSize; i++)
+    {
+        int width = right[i] - left[i] - 1;
+        int area = heights[i] * width;
+        maxarea = maxarea > area ? maxarea : area;
+    }
+
+    free(left);
+    free(right);
 
     return maxarea;
 }
-bool is_rect(char** matrix, int row, int col,
-             int point1_row, int point1_col,
-             int point2_row, int point2_col)
+
+struct Stack* stack_create()
 {
-    if (point1_row < 0 || point1_col < 0 || point1_row >= row || point1_col >= col ||
-        point2_row < 0 || point2_col < 0 || point2_row >= row || point2_col >= col) return false;
+    struct Stack* Stack = (struct Stack*)malloc(sizeof(struct Stack));
+    if (!Stack) return NULL;
 
-    for (int i = point1_row; i <= point2_row; ++i)
-        for (int j = point1_col; j <= point2_col; ++j)
-            if (matrix[i][j] == '0') return false;
+    Stack -> count = 0;
+    Stack -> top = NULL;
 
-    return true;
+    return Stack;
+}
+
+void stack_push(struct Stack* Stack, int index)
+{
+    if (!Stack) return ;
+    struct StackNode* newNode = (struct StackNode*)malloc(sizeof(struct StackNode));
+    if (!newNode) return ;
+    newNode -> index = index;
+    newNode -> next = NULL;
+
+    newNode -> next = Stack -> top;
+    Stack -> top = newNode;
+    Stack -> count++;
+}
+
+int stack_pop(struct Stack* Stack)
+{
+    if (!Stack || !Stack -> top) return -1;
+
+    struct StackNode* temp = Stack -> top;
+    Stack -> top = temp -> next;
+
+    int index = temp -> index;
+    free(temp);
+    Stack -> count--;
+    return index;
+}
+
+int stack_top(struct Stack* Stack)
+{
+    if (!Stack || !Stack -> top) return -1;
+    return Stack -> top -> index;
+}
+
+void stack_free(struct Stack* Stack)
+{
+    struct StackNode* current = Stack -> top;
+    while (current)
+    {
+        struct StackNode* temp = current;
+        current = current -> next;
+        free(temp);
+    }
+
+    free(Stack);
 }
 // @lc code=end
 
