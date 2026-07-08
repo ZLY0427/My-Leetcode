@@ -24,12 +24,15 @@ char*** partition(char* s, int* returnSize, int** returnColumnSizes)
     *returnColumnSizes = NULL;
 
     char*** result = (char***)malloc(sizeof(char**));
-    result[0] = (char**)malloc(sizeof(char*));
+
+    
+
+    return result;
 }
 
 bool is_palindrome(char* s, int left, int right)
 {
-    if (!s) return false;
+    if (!s || left > right) return false;
     while (left < right) if (s[left++] != s[right--]) return false;
 
     return true;
