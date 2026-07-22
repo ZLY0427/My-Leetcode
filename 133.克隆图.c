@@ -24,30 +24,124 @@ struct Node {
 };
 #endif
 
+struct QueueNode {
+    struct Node* node;
+    struct QueueNode* next;
+};
+
+struct Queue {
+    struct QueueNode* head;
+    struct QueueNode* real;
+    int length;
+};
+
+struct Queue* Create_Queue();
+void Push_Queue(struct Queue* queue, struct Node* node);
+struct QueueNode* Pop_Queue(struct Queue* queue);
+void Delete_Queue(struct Queue* queue);
+
 struct Node *cloneGraph(struct Node *s)
 {
     if (!s) return NULL;
-	bool* visited = calloc(101, sizeof(bool));
-    if (!visited) return NULL;
 
-    struct Node* copyNode = malloc(sizeof(struct Node));
-    if (!copyNode)
+    struct Node** cloneMap = (struct Node**)calloc(101, sizeof(struct Node*));
+    struct Queue* queue = Create_Queue();
+    if (!cloneMap || !queue)
     {
-        free(visited);
+        free(cloneMap);
+        Delete_Queue(queue);
         return NULL;
     }
-    copyNode -> val = s -> val;
-    copyNode -> numNeighbors = s -> numNeighbors;
-    copyNode -> neighbors = malloc(sizeof(struct Node*) * copyNode -> numNeighbors);
-    if (!copyNode -> neighbors)
+
+    struct Node* copyS = (struct Node*)malloc(sizeof(struct Node));
+    copyS -> val = s -> val;
+    cloneMap[s -> val] = copyS;
+    Push_Queue(queue, s);
+
+    while (queue -> length > 0)
     {
-        free(copyNode);
-        free(visited);
-        return NULL;
+        struct QueueNode* qNode = Pop_Queue(queue);
+        struct Node* cur = qNode -> node;
+        free(qNode);
+
+        struct Node* copyCur = cloneMap[cur -> val];
+        
+        copyCur -> numNeighbors = cur -> numNeighbors;
+        copyCur -> neighbors = (struct Node**)malloc(sizeof(struct Node*) * cur -> numNeighbors);
+
+        for (int i = 0; i < cur -> numNeighbors; ++i)
+        {
+            struct Node* oriNei = cur -> neighbors[i];
+            if (!cloneMap[oriNei -> val])
+            {
+                struct Node* copyNei = (struct Node*)malloc(sizeof(struct Node));
+                copyNei -> val = oriNei -> val;
+                cloneMap[oriNei -> val] = copyNei;
+                Push_Queue(queue, oriNei);
+            }
+            copyCur -> neighbors[i] = cloneMap[oriNei -> val];
+        }
     }
-    for (int i = 0; i < copyNode -> numNeighbors; ++i)
-        copyNode -> neighbors[i] = NULL;
-    visited[s -> val] = true;
+
+    Delete_Queue(queue);
+    free(cloneMap);
+    return copyS;
+}
+
+struct Queue* Create_Queue()
+{
+    struct Queue* queue = (struct Queue*)malloc(sizeof(struct Queue));
+    if (!queue) return NULL;
+
+    queue -> head = NULL;
+    queue -> real = NULL;
+    queue -> length = 0;
+
+    return queue;
+}
+
+void Push_Queue(struct Queue* queue, struct Node* node)
+{
+    if (!queue || !node) return ;
+    
+    struct QueueNode* queueNode = (struct QueueNode*)malloc(sizeof(struct QueueNode));
+    if (!queueNode) return ;
+    
+    queueNode -> node = node;
+    queueNode -> next = NULL;
+
+    if (queue -> length == 0)
+        queue -> head = queue -> real = queueNode;
+    else
+    {
+        queue -> real -> next = queueNode;
+        queue -> real = queueNode;
+    }
+    ++(queue -> length);
+}
+
+struct QueueNode* Pop_Queue(struct Queue* queue)
+{
+    if (!queue || queue -> length <= 0) return NULL;
+
+    struct QueueNode* queueNode = queue -> head;
+    if (queue -> length == 1)
+        queue -> head = queue -> real = NULL;
+    else
+        queue -> head = queueNode -> next;
+
+    --(queue -> length);
+
+    return queueNode;
+}
+
+void Delete_Queue(struct Queue* queue)
+{
+    if (!queue) return ;
+
+    while (queue -> length > 0) free(Pop_Queue(queue));
+
+    free(queue);
 }
 // @lc code=end
 
