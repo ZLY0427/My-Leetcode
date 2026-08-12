@@ -49,10 +49,10 @@ bool wordBreak(char* s, char** wordDict, int wordDictSize)
                 if (left + wordLen == sSize)
                     return true;
                 
-                if (!visited[left + wordLen])
+                if (!visited[left + wordLen - 1])
                 {
                     push_Queue(q, left + wordLen);
-                    visited[left + wordLen] = true;
+                    visited[left + wordLen - 1] = true;
                 }
             }
         }
