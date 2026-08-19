@@ -27,8 +27,7 @@ int compareVersion(char* version1, char* version2)
         while (right1 < len1 && version1[right1] != '.') ++right1;
         while (right2 < len2 && version2[right2] != '.') ++right2;
 
-        int result = compareSeg(version1, left1, right1 - 1,
-                                version2, left2, right2 - 1);
+        int result = compareSeg(version1, left1, right1 - 1, version2, left2, right2 - 1);
 
         if (result == 1) return 1;
         else if (result == -1) return -1;
