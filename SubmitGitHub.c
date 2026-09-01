@@ -9,6 +9,14 @@
  *   2. 在终端提示你输入提交注释（commit message）
  *   3. 自动执行 git commit 和 git push，推送到 GitHub
  *
+ * 编码处理（重要）:
+ *   - 终端输入的注释会先按控制台代码页（如 GBK）转换成 UTF-8，
+ *     再写入提交，因此提交信息在 GitHub 上能正确显示中文。
+ *   - git 自身的输出（如 [main xxx] 提交摘要）会按控制台代码页
+ *     输出，保证在 GBK 终端里也显示正常、不乱码。
+ *   - git status 里中文文件名显示为 \344\270\255 这类八进制转义，
+ *     这是 git 的默认行为（core.quotepath），属于正常现象。
+ *
  * 使用方法（Windows / MinGW gcc）:
  *   编译:   gcc SubmitGitHub.c -o SubmitGitHub.exe
  *   运行:   SubmitGitHub.exe      （在仓库文件夹内运行）
@@ -23,8 +31,7 @@
  * 说明:
  *   - 提交注释先写入临时文件 commit_msg.tmp 再交给 git，
  *     因此注释里可以包含双引号 " 等特殊字符，不会报错。
- *   - Windows 下会根据控制台代码页自动设置提交编码，
- *     保证中文注释不乱码（提交到仓库后统一为 UTF-8）。
+ *   - 没有可提交的更改时，程序会提示并直接退出，不会要求输入。
  *   - 提交完成后临时文件会自动删除。
  * ============================================================
  */
@@ -47,10 +54,52 @@ static const char *TMP_FILE = "commit_msg.tmp";
 #define DEVNULL "/dev/null"
 #endif
 
+/* 取得控制台输出代码页对应的 git 编码名（用于 git 自身输出） */
+static void console_encoding_name(char *buf, size_t size)
+{
+#ifdef _WIN32
+    UINT cp = GetConsoleOutputCP();
+    switch (cp) {
+        case 936:   snprintf(buf, size, "GBK");       break;  /* 简体中文 */
+        case 950:   snprintf(buf, size, "BIG5");      break;  /* 繁体中文 */
+        case 932:   snprintf(buf, size, "SHIFT-JIS"); break;  /* 日文 */
+        case 65001: snprintf(buf, size, "UTF-8");     break;
+        case 0:     snprintf(buf, size, "UTF-8");     break;
+        default:    snprintf(buf, size, "cp%u", cp);  break;
+    }
+#else
+    snprintf(buf, size, "UTF-8");
+#endif
+}
+
+/* 把控制台输入的字节从代码页 cp 转换为 UTF-8；失败返回 -1 */
+#ifdef _WIN32
+static int console_to_utf8(const char *in, char *out, size_t out_size, UINT cp)
+{
+    int wlen = MultiByteToWideChar(cp, 0, in, -1, NULL, 0);
+    if (wlen <= 0)
+        return -1;
+    wchar_t *wbuf = (wchar_t *)malloc((size_t)wlen * sizeof(wchar_t));
+    if (wbuf == NULL)
+        return -1;
+    MultiByteToWideChar(cp, 0, in, -1, wbuf, wlen);
+    int ulen = WideCharToMultiByte(CP_UTF8, 0, wbuf, -1, NULL, 0, NULL, NULL);
+    if (ulen <= 0 || (size_t)ulen > out_size) {
+        free(wbuf);
+        return -1;
+    }
+    WideCharToMultiByte(CP_UTF8, 0, wbuf, -1, out, ulen, NULL, NULL);
+    free(wbuf);
+    return 0;
+}
+#endif
+
 int main(void)
 {
     char msg[MAX_MSG];
-    char cmd[2100];
+    char utf8_msg[MAX_MSG * 4];     /* 转成 UTF-8 后可能更长 */
+    char encname[32];
+    char cmd[2200];
     int rc;
 
     /* 1. 检查 git 是否可用 */
@@ -82,7 +131,7 @@ int main(void)
         return 1;
     }
 
-    /* 5. 检查是否有可提交的内容 */
+    /* 5. 检查是否有可提交的内容（无更改则直接退出，不要求输入） */
     rc = system("git diff --cached --quiet");
     if (rc == 0) {
         printf("没有需要提交的更改，程序结束。\n");
@@ -100,45 +149,38 @@ int main(void)
         printf("[提示] 未输入提交注释，已取消提交。\n");
         return 1;
     }
-    printf("提交注释: %s\n\n", msg);
 
-    /* 7. 将注释写入临时文件，避免命令行转义问题 */
+    /* 7. 把注释从控制台代码页转换为 UTF-8，保证 GitHub 上中文不乱码 */
+#ifdef _WIN32
+    if (console_to_utf8(msg, utf8_msg, sizeof(utf8_msg), GetConsoleCP()) != 0) {
+        printf("[警告] 编码转换失败，将按原始字节提交。\n");
+        strncpy(utf8_msg, msg, sizeof(utf8_msg) - 1);
+        utf8_msg[sizeof(utf8_msg) - 1] = '\0';
+    }
+#else
+    strncpy(utf8_msg, msg, sizeof(utf8_msg) - 1);
+    utf8_msg[sizeof(utf8_msg) - 1] = '\0';
+#endif
+    printf("提交注释: %s\n\n", msg);   /* 回显用原始输入，控制台显示正常 */
+
+    /* 8. 将 UTF-8 注释写入临时文件，避免命令行转义问题 */
     {
         FILE *f = fopen(TMP_FILE, "wb");
         if (f == NULL) {
             printf("[错误] 无法创建临时文件 %s。\n", TMP_FILE);
             return 1;
         }
-        fprintf(f, "%s\n", msg);
+        fprintf(f, "%s\n", utf8_msg);
         fclose(f);
     }
 
-    /* 8. 提交。Windows 下按控制台代码页指定编码，保证中文注释不乱码 */
+    /* 9. 提交：信息以 UTF-8 存储（GitHub 显示正确）；
+            git 自身输出按控制台代码页显示（终端不乱码） */
+    console_encoding_name(encname, sizeof(encname));
     printf("[3/4] git commit ...\n");
-#ifdef _WIN32
-    {
-        UINT cp = GetConsoleOutputCP();
-        const char *enc = "UTF-8";
-        char encbuf[32];
-        switch (cp) {
-            case 936:  enc = "GBK";        break;   /* 简体中文 */
-            case 950:  enc = "BIG5";       break;   /* 繁体中文 */
-            case 932:  enc = "SHIFT-JIS";  break;   /* 日文 */
-            case 65001: enc = "UTF-8";     break;   /* UTF-8 */
-            case 0:    enc = "UTF-8";      break;
-            default:
-                snprintf(encbuf, sizeof(encbuf), "cp%u", cp);
-                enc = encbuf;
-                break;
-        }
-        snprintf(cmd, sizeof(cmd),
-                 "git -c i18n.commitEncoding=%s commit -F %s",
-                 enc, TMP_FILE);
-    }
-#else
     snprintf(cmd, sizeof(cmd),
-             "git -c i18n.commitEncoding=UTF-8 commit -F %s", TMP_FILE);
-#endif
+             "git -c i18n.commitEncoding=UTF-8 -c i18n.logOutputEncoding=%s commit -F %s",
+             encname, TMP_FILE);
     rc = system(cmd);
     remove(TMP_FILE);   /* 无论成败都清理临时文件 */
     if (rc != 0) {
@@ -146,7 +188,7 @@ int main(void)
         return 1;
     }
 
-    /* 9. 推送到 GitHub */
+    /* 10. 推送到 GitHub */
     printf("\n[4/4] git push ...\n");
     rc = system("git push");
     if (rc != 0) {
