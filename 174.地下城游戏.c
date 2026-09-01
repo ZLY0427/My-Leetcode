@@ -60,6 +60,7 @@ int calculateMinimumHP(int** dungeon, int dungeonSize, int* dungeonColSize)
     }
 
     int result = dp[0][0];
+    
     for(int i = 0; i < row; ++i) free(dp[i]);
     free(dp);
 
