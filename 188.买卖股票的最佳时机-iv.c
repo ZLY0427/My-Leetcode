@@ -9,7 +9,8 @@
 
 int maxProfit(int k, int* prices, int pricesSize)
 {
-    
+    if (!prices || pricesSize <= 0) return -1;
+    else if (pricesSize == 1) return 0;
 }
 // @lc code=end
 
