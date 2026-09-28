@@ -18,13 +18,15 @@ bool is_palindrome(char* s, int left, int right);
 
 char*** partition(char* s, int* returnSize, int** returnColumnSizes)
 {
-    int len = strlen(s);
-
     *returnSize = 0;
     *returnColumnSizes = NULL;
+    if (!s) return NULL;
+    
+    int len = strlen(s);
+    if (len <= 0) return NULL;
 
     char*** result = (char***)malloc(sizeof(char**));
-
+    if (!result) return NULL;
     
 
     return result;
